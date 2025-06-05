@@ -115,7 +115,7 @@ df_region <- df_indiv %>%
 df_region_wide <- pivot_wider(df_region, names_from = scientificName, values_from = sum_trap, values_fill = 0)
 
 ## Loading France's shape file
-france <- st_read("./france/france_regions_modified.shp")
+france <- st_read("./France/france_regions_modified.shp")
 france_centroids <- st_centroid(france)
 
 france_species <- left_join(france_centroids, df_region_wide, by = c("region" = "stateProvince")) #joining culicoides df with geometry

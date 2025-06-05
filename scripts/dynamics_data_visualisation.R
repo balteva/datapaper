@@ -6,7 +6,7 @@
 # Date        : 2025-05-27
 # Project     : VECTOCLIM
 # ---------------------------------------------------------------------------------
-setwd("C:/Users/ibalt/OneDrive/Desktop/uni/M2 stage/Cullicoides_data/CIRAD/culicoides_ml/DP_old")
+
 
 ## Loading packages 
 

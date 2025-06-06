@@ -14,6 +14,7 @@ library(tidyverse)  ## Version '2.0.0'
 library(sf)         ## Version '1.0.19'
 library(scatterpie) ## Version '0.2.4'
 library(scales)     ## Version '1.3.0'
+library(ggspatial)  ## version ‘1.1.9’
 
 setwd("./datapaper")
 
@@ -37,7 +38,7 @@ data <- read.delim("./data/occurrence.txt", header = TRUE) %>%
 
 ## Loading sampling location information
 event <- read.delim("./data/event.txt", header = TRUE) %>%
-  select(eventID, eventDate,startDayOfYear,month,year, habitat, locationID, stateProvince)%>%
+  select(eventID, eventDate,startDayOfYear,month,year, habitat, locationID, stateProvince, decimalLatitude, decimalLongitude)%>%
   mutate(date = as.Date(startDayOfYear - 1, origin = paste0(year, "-01-01")))
 
 ## Joining the two dataframes
@@ -45,8 +46,7 @@ df_indiv <- data %>%
   left_join(event, by="eventID") %>%
   select(-c(eventDate, startDayOfYear)) %>%
   relocate(stateProvince, locationID,date, .after= eventID) %>%
-  filter(organismQuantityType=="individuals")#select organism type of interest (i.e. all specimens/only females/parous females.. )
-
+  filter(organismQuantityType=="individuals")# selecting organism type of interest (i.e. all specimens/only females/parous females.. )
 
 
 ###################################
@@ -89,21 +89,57 @@ ggplot(trap_info, aes(x=week, y=trap_count, fill=as.factor(year)))+
        y = "Number of traps at national scale",
        fill= "Surveillance period")+
   theme_minimal() +
-  theme(axis.title.x = element_text(size = 11, face="bold"),
-        axis.title.y = element_text(size = 11, face="bold"),
-        plot.title = element_text(hjust = 0.5, size= 14, face="bold"),
+  theme(axis.title.x = element_text(size = 10, face="bold"),
+        axis.title.y = element_text(size = 10, face="bold"),
+        plot.title = element_text(hjust = 0.5, size= 12, face="bold"),
         axis.text.x = element_text(size=10),
         axis.text.y = element_text(size=10),
-        strip.text=element_text(size=12,face="bold"),
+        strip.text=element_text(size=11,face="bold"),
         legend.position="bottom",
-        legend.title = element_text(face = "bold", size = 12),
+        legend.title = element_text(face = "bold", size = 10),
         legend.text = element_text(size = 10))
 
 
+
 ############################################
-## Figure 5.  Population composition (maps)
+## Figure 4.  Trap locations (map)
 ############################################
 
+# Loading France's shapefile containing biogeographic region boundaries
+france_ecocli <- st_read("./France/france_ecoclimatic_zones.gpkg")
+france_ecocli <- st_transform(france_ecocli,4326)
+
+# Selecting unique trapping locations with their coordinates
+trap_locations <- event %>%
+  select(locationID, decimalLatitude, decimalLongitude)%>%
+  distinct()
+
+my_colors1 <- c("#f99f9b", "#c8e08d", "#c5f1f2","#d7bdeb" )
+
+# Plotting 
+ggplot()+
+  geom_sf(data=france_ecocli, aes(fill=code), linewidth=0.7, alpha=0.6, color="black")+
+  annotation_scale(location="br", width_hint=0.2,
+                   bar_cols=c("black", "white"),
+                   unit_category="metric")+
+  geom_point(data= trap_locations, aes(x=decimalLongitude, y=decimalLatitude), stroke=0.9, size=1.5, shape=21,fill="red", color="black")+ 
+  theme_minimal()+
+  labs(title="Fig. 4 Geographic distribution of Culicoides trapping sites across mainland France from 2009 to 2012", fill="Biogeographic Region")+
+  scale_fill_manual(values=my_colors1)+
+  theme(legend.position = 'right',
+        plot.title = element_text(hjust=0.5 ,face="bold", size=12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text = element_blank(),
+        strip.text = element_text(face="bold", size =10))
+
+
+
+############################################
+## Figure 5.  Population composition (map)
+############################################
+
+species_of_interest <- c("obsoletus/scoticus", "dewulfi", "imicola", "chiopterus","newsteadi", "punctatus", "pulicaris" )
 
 ## Summarizing data
 df_region <- df_indiv %>%
@@ -114,9 +150,9 @@ df_region <- df_indiv %>%
 
 df_region_wide <- pivot_wider(df_region, names_from = scientificName, values_from = sum_trap, values_fill = 0)
 
-## Loading France's shape file
-france <- st_read("./France/france_regions_modified.shp")
-france_centroids <- st_centroid(france)
+## Loading France's shape file with administrative regions
+fr_regions <- st_read("./France/france_regions_modified.shp")
+france_centroids <- st_centroid(fr_regions)
 
 france_species <- left_join(france_centroids, df_region_wide, by = c("region" = "stateProvince")) #joining culicoides df with geometry
 
@@ -129,7 +165,7 @@ species_cols <- c("obsoletus/scoticus", "pulicaris","punctatus", "newsteadi", "d
 
 ### Plotting
 ggplot() +
-  geom_sf(data = france, fill = "grey95", color = "black") +
+  geom_sf(data = fr_regions, fill = "grey95", color = "black") +
   geom_scatterpie(
     aes(x = lon, y = lat, group = region),
     data = st_drop_geometry(france_species), 
@@ -232,12 +268,11 @@ main_species_metrics <-  most_abundant_species %>%
 
 
 
-############################################
+##############################################
 ## Plotting only the seven species of interest
-############################################
+##############################################
 
-species_of_interest <- c("obsoletus/scoticus", "dewulfi", "imicola", "chiopterus","newsteadi", "punctatus", "pulicaris" ) 
-
+#species_of_interest <- c("obsoletus/scoticus", "dewulfi", "imicola", "chiopterus","newsteadi", "punctatus", "pulicaris" ) # object already called for fig. 5
 
 df_main_species <- df_indiv %>%
   filter(!occurrenceStatus == "absent") %>%
@@ -315,11 +350,10 @@ df_indiv%>%
   summarise(individualCount=sum(individualCount))%>%
   ggplot(aes(individualCount)) +
   geom_histogram(col = "black", alpha= 0.7, fill="deepskyblue")+
-  geom_vline(aes(xintercept = mean(individualCount), color = "mean"), linetype = "solid", size = 1)+ #adding descriptive stats
-  geom_vline(aes(xintercept = median(individualCount), color = "median"), linetype = "solid", size = 1)+
+  geom_vline(aes(xintercept = mean(individualCount), color = "mean"), linetype = "solid", linewidth = 1)+ #adding descriptive stats
+  geom_vline(aes(xintercept = median(individualCount), color = "median"), linetype = "solid", linewidth = 1)+
   scale_x_log10(labels = label_number(), breaks=breaks_log(n=6, base=10))+
   theme_minimal()+
-  ggtitle(expression("Fig. 8 Distribution of positive" *italic(" Culicoides spp. ")* "counts per trap from 2009 to 2012 in France."))+
   theme(plot.title = element_text(hjust = 0.5, face="bold"),
         axis.text.x = element_text(size=10, face="bold"),
         axis.text.y = element_text(size=10, face="bold"),
@@ -327,7 +361,7 @@ df_indiv%>%
         axis.title.y = element_text(size=12, face="bold"),
         strip.text=element_text(size=12,face="bold"),
         legend.position = "bottom")+
-  labs(x="Individuals caught in one trapping session (log scale)",
+  labs(title="Fig. 8 Distribution of positive Culicoides spp. counts per trap from 2009 to 2012 in France",
+       x="Individuals caught in one trapping session (log scale)",
        y="Frequency", color = "Statistics")+
   scale_color_manual(values=c("mean"="darkred", "median"="darkblue"))
-
